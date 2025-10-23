@@ -80,18 +80,28 @@ export function useWebRTC(
       };
 
       pc.ontrack = (e) => {
-        console.log(`📹 Received track from ${peerUserId}:`, e.streams[0]);
+        console.log(`📹 Received track from ${peerUserId}:`, e);
         console.log(`📹 Track details:`, {
           kind: e.track.kind,
           enabled: e.track.enabled,
           muted: e.track.muted,
           readyState: e.track.readyState,
-          streamId: e.streams[0]?.id
+          streams: e.streams.length
         });
-        const stream = e.streams[0];
-        if (stream) {
-          setRemoteStreams((prev) => ({ ...prev, [peerUserId]: stream }));
-          console.log(`✅ Remote stream set for ${peerUserId}`);
+
+        if (e.streams && e.streams.length > 0) {
+          const stream = e.streams[0];
+          console.log(`📹 Stream details:`, {
+            id: stream.id,
+            active: stream.active,
+            tracks: stream.getTracks().length
+          });
+
+          setRemoteStreams((prev) => {
+            const newStreams = { ...prev, [peerUserId]: stream };
+            console.log(`✅ Remote stream set for ${peerUserId}`, newStreams);
+            return newStreams;
+          });
         } else {
           console.error(`❌ No stream in ontrack event for ${peerUserId}`);
         }
@@ -153,8 +163,26 @@ export function useWebRTC(
       // Add local tracks to the new peer connection
       if (localStreamRef.current) {
         console.log(`📹 Adding local tracks to ${peerUserId}`);
+        console.log(
+          `📹 Local stream tracks:`,
+          localStreamRef.current.getTracks().map((t) => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState
+          }))
+        );
+
         localStreamRef.current.getTracks().forEach((track) => {
-          pc.addTrack(track, localStreamRef.current!);
+          try {
+            pc.addTrack(track, localStreamRef.current!);
+            console.log(`✅ Added ${track.kind} track to ${peerUserId}`);
+          } catch (error) {
+            console.error(
+              `❌ Error adding ${track.kind} track to ${peerUserId}:`,
+              error
+            );
+          }
         });
       } else {
         console.warn(`⚠️ No local stream available for ${peerUserId}`);
@@ -243,27 +271,54 @@ export function useWebRTC(
         pc = createPeerConnection(payload.fromUserId);
 
         // Add local tracks if available
-        if (localStreamRef.current) {
+        if (localStreamRef.current && pc) {
+          console.log(
+            `📹 Adding local tracks to existing PC for ${payload.fromUserId}`
+          );
           localStreamRef.current.getTracks().forEach((track) => {
-            pc.addTrack(track, localStreamRef.current!);
+            try {
+              pc!.addTrack(track, localStreamRef.current!);
+              console.log(
+                `✅ Added ${track.kind} track to existing PC for ${payload.fromUserId}`
+              );
+            } catch (error) {
+              console.error(
+                `❌ Error adding ${track.kind} track to existing PC for ${payload.fromUserId}:`,
+                error
+              );
+            }
           });
+        } else {
+          console.warn(
+            `⚠️ No local stream available for existing PC for ${payload.fromUserId}`
+          );
         }
       }
 
-      try {
-        await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        console.log(`📤 Sending answer to ${payload.fromUserId}`);
-        socket.emit("answer", {
-          roomId,
-          targetUserId: payload.fromUserId,
-          answer
-        });
-      } catch (error) {
+      if (pc) {
+        try {
+          await pc.setRemoteDescription(
+            new RTCSessionDescription(payload.offer)
+          );
+          console.log(`✅ Set remote description for ${payload.fromUserId}`);
+
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          console.log(`📤 Sending answer to ${payload.fromUserId}`);
+          socket.emit("answer", {
+            roomId,
+            targetUserId: payload.fromUserId,
+            answer
+          });
+        } catch (error) {
+          console.error(
+            `❌ Error handling offer from ${payload.fromUserId}:`,
+            error
+          );
+        }
+      } else {
         console.error(
-          `❌ Error handling offer from ${payload.fromUserId}:`,
-          error
+          `❌ No peer connection available for ${payload.fromUserId}`
         );
       }
     };
@@ -312,7 +367,7 @@ export function useWebRTC(
       }
     };
 
-    const onRoomStateDebug = (data: any) => {
+    const onRoomStateDebug = (data: unknown) => {
       console.log("🔍 Room state debug:", data);
     };
 

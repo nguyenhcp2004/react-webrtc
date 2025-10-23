@@ -47,6 +47,15 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
     console.log("📹 Remote streams updated:", Object.keys(remoteStreams));
     Object.entries(remoteStreams).forEach(([peerId, stream]) => {
       console.log(`📹 Remote stream for ${peerId}:`, stream);
+      console.log(
+        `📹 Stream tracks:`,
+        stream.getTracks().map((t) => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          muted: t.muted,
+          readyState: t.readyState
+        }))
+      );
     });
   }, [remoteStreams]);
 
@@ -321,9 +330,24 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               playsInline
               style={{ width: "100%", height: "240px", objectFit: "cover" }}
               ref={(el) => {
-                if (el) {
+                if (el && stream) {
                   console.log(`🎥 Setting remote video for ${peerId}:`, stream);
+                  console.log(`🎥 Stream details:`, {
+                    id: stream.id,
+                    active: stream.active,
+                    tracks: stream.getTracks().length,
+                    videoTracks: stream.getVideoTracks().length,
+                    audioTracks: stream.getAudioTracks().length
+                  });
                   el.srcObject = stream;
+
+                  // Force play
+                  el.play().catch((error) => {
+                    console.warn(
+                      `⚠️ Could not autoplay remote video for ${peerId}:`,
+                      error
+                    );
+                  });
                 }
               }}
               onLoadedMetadata={() => {
