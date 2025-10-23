@@ -29,7 +29,7 @@ export function useWebRTC(
 
   const rtcConfig = useMemo<RTCConfiguration>(
     () => ({
-      iceServers: iceServers ?? [{ urls: ["stun:stun.l.google.com:19302"] }]
+      iceServers: iceServers ?? [{ urls: ["stun:stun.l.google.com:19302"] }],
     }),
     [iceServers]
   );
@@ -37,7 +37,7 @@ export function useWebRTC(
   const ensureSocket = useCallback(() => {
     if (socketRef.current) return socketRef.current;
     const socket = io(`${signalingUrl}${namespace}`, {
-      transports: ["websocket"]
+      transports: ["websocket"],
     });
 
     socket.on("connect", () => {
@@ -67,7 +67,7 @@ export function useWebRTC(
           socketRef.current?.emit("ice-candidate", {
             roomId,
             targetUserId: peerUserId,
-            candidate: e.candidate
+            candidate: e.candidate,
           });
         }
       };
@@ -75,7 +75,12 @@ export function useWebRTC(
       pc.ontrack = (e) => {
         console.log(`📹 Received track from ${peerUserId}:`, e.streams[0]);
         const stream = e.streams[0];
-        setRemoteStreams((prev) => ({ ...prev, [peerUserId]: stream }));
+        console.log(`📹 Setting remote stream for ${peerUserId}:`, stream);
+        setRemoteStreams((prev) => {
+          const newStreams = { ...prev, [peerUserId]: stream };
+          console.log(`📹 Updated remote streams:`, newStreams);
+          return newStreams;
+        });
       };
 
       pc.onconnectionstatechange = () => {
@@ -222,29 +227,36 @@ export function useWebRTC(
           `🔗 Creating new peer connection for ${payload.fromUserId}`
         );
         pc = createPeerConnection(payload.fromUserId);
+      }
 
+      if (pc) {
         // Add local tracks if available
         if (localStreamRef.current) {
           localStreamRef.current.getTracks().forEach((track) => {
             pc.addTrack(track, localStreamRef.current!);
           });
         }
-      }
-
-      try {
-        await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        console.log(`📤 Sending answer to ${payload.fromUserId}`);
-        socket.emit("answer", {
-          roomId,
-          targetUserId: payload.fromUserId,
-          answer
-        });
-      } catch (error) {
+        try {
+          await pc.setRemoteDescription(
+            new RTCSessionDescription(payload.offer)
+          );
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          console.log(`📤 Sending answer to ${payload.fromUserId}`);
+          socket.emit("answer", {
+            roomId,
+            targetUserId: payload.fromUserId,
+            answer,
+          });
+        } catch (error) {
+          console.error(
+            `❌ Error handling offer from ${payload.fromUserId}:`,
+            error
+          );
+        }
+      } else {
         console.error(
-          `❌ Error handling offer from ${payload.fromUserId}:`,
-          error
+          `❌ No peer connection available for ${payload.fromUserId}`
         );
       }
     };
@@ -321,7 +333,7 @@ export function useWebRTC(
         throw new Error("getDisplayMedia is not supported in this browser");
 
       const displayStream: MediaStream = await getDisplayMedia({
-        video: true
+        video: true,
       } as unknown);
 
       const screenTrack = displayStream.getVideoTracks()[0];
@@ -409,6 +421,6 @@ export function useWebRTC(
     startCallWith,
     stopLocalTracks,
     startScreenShare,
-    stopScreenShare
+    stopScreenShare,
   };
 }

@@ -3,6 +3,62 @@ import { useWebRTC } from "../hooks/useWebRTC";
 import Chat from "./Chat";
 import MeetingControls from "./MeetingControls";
 
+// RemoteVideo component to properly handle remote streams
+function RemoteVideo({
+  peerId,
+  stream,
+}: {
+  peerId: string;
+  stream: MediaStream;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      console.log(`🎥 Setting remote stream for ${peerId}:`, stream);
+      videoRef.current.srcObject = stream;
+
+      // Ensure the video plays
+      videoRef.current.play().catch((error) => {
+        console.warn(`⚠️ Could not autoplay video for ${peerId}:`, error);
+      });
+    }
+  }, [stream, peerId]);
+
+  return (
+    <div
+      style={{
+        background: "#000",
+        borderRadius: "8px",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 8,
+          left: 8,
+          background: "rgba(0,0,0,0.7)",
+          color: "white",
+          padding: "4px 8px",
+          borderRadius: "4px",
+          fontSize: "12px",
+          zIndex: 10,
+        }}
+      >
+        {peerId}
+      </div>
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        style={{ width: "100%", height: "200px", objectFit: "cover" }}
+      />
+    </div>
+  );
+}
+
 type Props = {
   signalingUrl: string;
 };
@@ -32,14 +88,20 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
     startCallWith,
     stopLocalTracks,
     startScreenShare,
-    stopScreenShare
+    stopScreenShare,
   } = useWebRTC(roomId, userId, { signalingUrl });
 
   useEffect(() => {
     if (localVideoRef.current && localStreamRef.current) {
       localVideoRef.current.srcObject = localStreamRef.current;
     }
-  }, [localStreamRef.current]);
+  });
+
+  // Debug remote streams
+  useEffect(() => {
+    console.log("📹 Remote streams changed:", remoteStreams);
+    console.log("📹 Connected peers:", connectedPeers);
+  }, [remoteStreams, connectedPeers]);
 
   const handleJoin = async () => {
     console.log("Joining room...", { roomId, userId });
@@ -50,6 +112,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
 
   const handleStartMedia = async () => {
     const stream = await startLocalMedia();
+    console.log(`stream is ${JSON.stringify(stream)}`);
     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     setStarted(true);
 
@@ -80,27 +143,27 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           display: "flex",
           gap: 8,
           flexWrap: "wrap",
-          alignItems: "center"
+          alignItems: "center",
         }}
       >
         <input
           value={roomId}
           onChange={(e) => setRoomId(e.target.value)}
-          placeholder="room id"
+          placeholder='room id'
           style={{
             padding: "8px 12px",
             borderRadius: "6px",
-            border: "1px solid #ddd"
+            border: "1px solid #ddd",
           }}
         />
         <input
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
-          placeholder="your id"
+          placeholder='your id'
           style={{
             padding: "8px 12px",
             borderRadius: "6px",
-            border: "1px solid #ddd"
+            border: "1px solid #ddd",
           }}
         />
         {!joined ? (
@@ -112,7 +175,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "white",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer"
+              cursor: "pointer",
             }}
           >
             Join
@@ -126,7 +189,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "white",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer"
+              cursor: "pointer",
             }}
           >
             Leave
@@ -141,7 +204,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "white",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer"
+              cursor: "pointer",
             }}
           >
             Start Camera
@@ -156,7 +219,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "#333",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer"
+              cursor: "pointer",
             }}
           >
             Call Peers
@@ -171,7 +234,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           color: "#666",
           background: "#f8f9fa",
           padding: "12px",
-          borderRadius: "6px"
+          borderRadius: "6px",
         }}
       >
         <div>
@@ -192,7 +255,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: 12,
-          flex: 1
+          flex: 1,
         }}
       >
         {/* Local Video */}
@@ -201,7 +264,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
             background: "#000",
             borderRadius: "8px",
             overflow: "hidden",
-            position: "relative"
+            position: "relative",
           }}
         >
           <div
@@ -214,7 +277,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               padding: "4px 8px",
               borderRadius: "4px",
               fontSize: "12px",
-              zIndex: 10
+              zIndex: 10,
             }}
           >
             {isScreenSharing ? "Screen Share" : "You"}
@@ -230,39 +293,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
 
         {/* Remote Videos */}
         {Object.entries(remoteStreams).map(([peerId, stream]) => (
-          <div
-            key={peerId}
-            style={{
-              background: "#000",
-              borderRadius: "8px",
-              overflow: "hidden",
-              position: "relative"
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                top: 8,
-                left: 8,
-                background: "rgba(0,0,0,0.7)",
-                color: "white",
-                padding: "4px 8px",
-                borderRadius: "4px",
-                fontSize: "12px",
-                zIndex: 10
-              }}
-            >
-              {peerId}
-            </div>
-            <video
-              autoPlay
-              playsInline
-              style={{ width: "100%", height: "200px", objectFit: "cover" }}
-              ref={(el) => {
-                if (el) el.srcObject = stream;
-              }}
-            />
-          </div>
+          <RemoteVideo key={peerId} peerId={peerId} stream={stream} />
         ))}
       </div>
 
