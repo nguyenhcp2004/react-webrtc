@@ -29,7 +29,14 @@ export function useWebRTC(
 
   const rtcConfig = useMemo<RTCConfiguration>(
     () => ({
-      iceServers: iceServers ?? [{ urls: ["stun:stun.l.google.com:19302"] }]
+      iceServers: iceServers ?? [
+        { urls: ["stun:stun.l.google.com:19302"] },
+        { urls: ["stun:stun1.l.google.com:19302"] },
+        { urls: ["stun:stun2.l.google.com:19302"] },
+        { urls: ["stun:stun3.l.google.com:19302"] },
+        { urls: ["stun:stun4.l.google.com:19302"] }
+      ],
+      iceCandidatePoolSize: 10
     }),
     [iceServers]
   );
@@ -74,8 +81,20 @@ export function useWebRTC(
 
       pc.ontrack = (e) => {
         console.log(`📹 Received track from ${peerUserId}:`, e.streams[0]);
+        console.log(`📹 Track details:`, {
+          kind: e.track.kind,
+          enabled: e.track.enabled,
+          muted: e.track.muted,
+          readyState: e.track.readyState,
+          streamId: e.streams[0]?.id
+        });
         const stream = e.streams[0];
-        setRemoteStreams((prev) => ({ ...prev, [peerUserId]: stream }));
+        if (stream) {
+          setRemoteStreams((prev) => ({ ...prev, [peerUserId]: stream }));
+          console.log(`✅ Remote stream set for ${peerUserId}`);
+        } else {
+          console.error(`❌ No stream in ontrack event for ${peerUserId}`);
+        }
       };
 
       pc.onconnectionstatechange = () => {
@@ -293,12 +312,17 @@ export function useWebRTC(
       }
     };
 
+    const onRoomStateDebug = (data: any) => {
+      console.log("🔍 Room state debug:", data);
+    };
+
     socket.on("existing-users", onExistingUsers);
     socket.on("user-joined", onUserJoined);
     socket.on("user-left", onUserLeft);
     socket.on("offer", onOffer);
     socket.on("answer", onAnswer);
     socket.on("ice-candidate", onCandidate);
+    socket.on("room-state-debug", onRoomStateDebug);
 
     return () => {
       socket.off("existing-users", onExistingUsers);
@@ -307,6 +331,7 @@ export function useWebRTC(
       socket.off("offer", onOffer);
       socket.off("answer", onAnswer);
       socket.off("ice-candidate", onCandidate);
+      socket.off("room-state-debug", onRoomStateDebug);
     };
   }, [createPeerConnection, ensureSocket, roomId, startCallWith, userId]);
 
