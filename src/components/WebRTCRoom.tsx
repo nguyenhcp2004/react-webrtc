@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useWebRTC } from "../hooks/useWebRTC";
+import Chat from "./Chat";
+import MeetingControls from "./MeetingControls";
 
 type Props = {
   signalingUrl: string;
@@ -12,18 +14,25 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
   );
   const [joined, setJoined] = useState(false);
   const [started, setStarted] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isHandRaised, setIsHandRaised] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const {
+    socket,
     localStreamRef,
     remoteStreams,
     connectedPeers,
+    isScreenSharing,
     joinRoom,
     leaveRoom,
     startLocalMedia,
     startCallWith,
-    stopLocalTracks
+    stopLocalTracks,
+    startScreenShare,
+    stopScreenShare
   } = useWebRTC(roomId, userId, { signalingUrl });
 
   useEffect(() => {
@@ -33,8 +42,10 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
   }, [localStreamRef.current]);
 
   const handleJoin = async () => {
+    console.log("Joining room...", { roomId, userId });
     await joinRoom();
     setJoined(true);
+    console.log("Socket after join:", socket?.current?.id);
   };
 
   const handleStartMedia = async () => {
@@ -62,35 +73,112 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
   };
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <div style={{ display: "grid", gap: 12, minHeight: "100vh" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          alignItems: "center"
+        }}
+      >
         <input
           value={roomId}
           onChange={(e) => setRoomId(e.target.value)}
           placeholder="room id"
+          style={{
+            padding: "8px 12px",
+            borderRadius: "6px",
+            border: "1px solid #ddd"
+          }}
         />
         <input
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
           placeholder="your id"
+          style={{
+            padding: "8px 12px",
+            borderRadius: "6px",
+            border: "1px solid #ddd"
+          }}
         />
         {!joined ? (
-          <button onClick={handleJoin}>Join</button>
+          <button
+            onClick={handleJoin}
+            style={{
+              padding: "8px 16px",
+              background: "#007bff",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer"
+            }}
+          >
+            Join
+          </button>
         ) : (
-          <button onClick={handleLeave}>Leave</button>
+          <button
+            onClick={handleLeave}
+            style={{
+              padding: "8px 16px",
+              background: "#dc3545",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer"
+            }}
+          >
+            Leave
+          </button>
         )}
         {joined && !started && (
-          <button onClick={handleStartMedia}>Start Camera</button>
+          <button
+            onClick={handleStartMedia}
+            style={{
+              padding: "8px 16px",
+              background: "#28a745",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer"
+            }}
+          >
+            Start Camera
+          </button>
         )}
         {joined && started && (
-          <button onClick={handleCallAll}>Call Peers</button>
+          <button
+            onClick={handleCallAll}
+            style={{
+              padding: "8px 16px",
+              background: "#ffc107",
+              color: "#333",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer"
+            }}
+          >
+            Call Peers
+          </button>
         )}
       </div>
 
-      <div style={{ fontSize: "14px", color: "#666" }}>
+      {/* Status */}
+      <div
+        style={{
+          fontSize: "14px",
+          color: "#666",
+          background: "#f8f9fa",
+          padding: "12px",
+          borderRadius: "6px"
+        }}
+      >
         <div>
           Status: {joined ? "Joined" : "Not joined"} |{" "}
           {started ? "Media started" : "No media"}
+          {isScreenSharing && " | Screen sharing"}
+          {isRecording && " | Recording"}
         </div>
         <div>
           Connected peers: {connectedPeers.length} ({connectedPeers.join(", ")})
@@ -98,35 +186,112 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
         <div>Remote streams: {Object.keys(remoteStreams).length}</div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div>
-          <div>Local</div>
+      {/* Video Grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: 12,
+          flex: 1
+        }}
+      >
+        {/* Local Video */}
+        <div
+          style={{
+            background: "#000",
+            borderRadius: "8px",
+            overflow: "hidden",
+            position: "relative"
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: 8,
+              left: 8,
+              background: "rgba(0,0,0,0.7)",
+              color: "white",
+              padding: "4px 8px",
+              borderRadius: "4px",
+              fontSize: "12px",
+              zIndex: 10
+            }}
+          >
+            {isScreenSharing ? "Screen Share" : "You"}
+          </div>
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
-            style={{ width: "100%", background: "#000" }}
+            style={{ width: "100%", height: "200px", objectFit: "cover" }}
           />
         </div>
 
-        <div>
-          <div>Remotes</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {Object.entries(remoteStreams).map(([peerId, stream]) => (
-              <video
-                key={peerId}
-                autoPlay
-                playsInline
-                style={{ width: "100%", background: "#000" }}
-                ref={(el) => {
-                  if (el) el.srcObject = stream;
-                }}
-              />
-            ))}
+        {/* Remote Videos */}
+        {Object.entries(remoteStreams).map(([peerId, stream]) => (
+          <div
+            key={peerId}
+            style={{
+              background: "#000",
+              borderRadius: "8px",
+              overflow: "hidden",
+              position: "relative"
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 8,
+                left: 8,
+                background: "rgba(0,0,0,0.7)",
+                color: "white",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                fontSize: "12px",
+                zIndex: 10
+              }}
+            >
+              {peerId}
+            </div>
+            <video
+              autoPlay
+              playsInline
+              style={{ width: "100%", height: "200px", objectFit: "cover" }}
+              ref={(el) => {
+                if (el) el.srcObject = stream;
+              }}
+            />
           </div>
-        </div>
+        ))}
       </div>
+
+      {/* Meeting Controls */}
+      {joined && started && (
+        <MeetingControls
+          roomId={roomId}
+          userId={userId}
+          socket={socket?.current}
+          isHandRaised={isHandRaised}
+          onToggleHand={() => setIsHandRaised(!isHandRaised)}
+          isRecording={isRecording}
+          onToggleRecording={() => setIsRecording(!isRecording)}
+          onStartScreenShare={startScreenShare}
+          onStopScreenShare={stopScreenShare}
+          isScreenSharing={isScreenSharing}
+        />
+      )}
+
+      {/* Chat */}
+      {joined && (
+        <Chat
+          roomId={roomId}
+          userId={userId}
+          socket={socket?.current}
+          isOpen={isChatOpen}
+          onToggle={() => setIsChatOpen(!isChatOpen)}
+        />
+      )}
     </div>
   );
 }

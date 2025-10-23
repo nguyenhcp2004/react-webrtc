@@ -23,6 +23,9 @@ export function useWebRTC(
     Record<PeerId, MediaStream>
   >({});
   const [connectedPeers, setConnectedPeers] = useState<PeerId[]>([]);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [screenShareStream, setScreenShareStream] =
+    useState<MediaStream | null>(null);
 
   const rtcConfig = useMemo<RTCConfiguration>(
     () => ({
@@ -38,11 +41,15 @@ export function useWebRTC(
     });
 
     socket.on("connect", () => {
-      console.log("Socket connected:", socket.id);
+      console.log("✅ Socket connected:", socket.id);
     });
 
-    socket.on("disconnect", () => {
-      console.log("Socket disconnected");
+    socket.on("disconnect", (reason) => {
+      console.log("❌ Socket disconnected:", reason);
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("❌ Socket connection error:", error);
     });
 
     socketRef.current = socket;
@@ -51,10 +58,12 @@ export function useWebRTC(
 
   const createPeerConnection = useCallback(
     (peerUserId: PeerId) => {
+      console.log(`🔗 Creating peer connection with ${peerUserId}`);
       const pc = new RTCPeerConnection(rtcConfig);
 
       pc.onicecandidate = (e) => {
         if (e.candidate) {
+          console.log(`📤 Sending ICE candidate to ${peerUserId}`);
           socketRef.current?.emit("ice-candidate", {
             roomId,
             targetUserId: peerUserId,
@@ -64,8 +73,23 @@ export function useWebRTC(
       };
 
       pc.ontrack = (e) => {
+        console.log(`📹 Received track from ${peerUserId}:`, e.streams[0]);
         const stream = e.streams[0];
         setRemoteStreams((prev) => ({ ...prev, [peerUserId]: stream }));
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log(
+          `🔗 Connection state with ${peerUserId}:`,
+          pc.connectionState
+        );
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log(
+          `🧊 ICE connection state with ${peerUserId}:`,
+          pc.iceConnectionState
+        );
       };
 
       pcRef.current.set(peerUserId, pc);
@@ -76,7 +100,7 @@ export function useWebRTC(
 
   const joinRoom = useCallback(async () => {
     const socket = ensureSocket();
-    console.log("Joining room:", { roomId, userId });
+    console.log("🚪 Joining room:", { roomId, userId });
     socket.emit("join-room", { roomId, userId });
   }, [ensureSocket, roomId, userId]);
 
@@ -103,19 +127,28 @@ export function useWebRTC(
 
   const startCallWith = useCallback(
     async (peerUserId: PeerId) => {
+      console.log(`📞 Starting call with ${peerUserId}`);
       const socket = ensureSocket();
       const pc = createPeerConnection(peerUserId);
 
       // Add local tracks to the new peer connection
       if (localStreamRef.current) {
+        console.log(`📹 Adding local tracks to ${peerUserId}`);
         localStreamRef.current.getTracks().forEach((track) => {
           pc.addTrack(track, localStreamRef.current!);
         });
+      } else {
+        console.warn(`⚠️ No local stream available for ${peerUserId}`);
       }
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("offer", { roomId, targetUserId: peerUserId, offer });
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        console.log(`📤 Sending offer to ${peerUserId}`);
+        socket.emit("offer", { roomId, targetUserId: peerUserId, offer });
+      } catch (error) {
+        console.error(`❌ Error creating offer for ${peerUserId}:`, error);
+      }
     },
     [createPeerConnection, ensureSocket, roomId]
   );
@@ -131,17 +164,20 @@ export function useWebRTC(
     const onExistingUsers = async (
       payload: { userId: string; socketId: string }[]
     ) => {
-      console.log("Existing users:", payload);
+      console.log("👥 Existing users:", payload);
       for (const user of payload) {
         if (user.userId !== userId) {
+          console.log(`➕ Adding existing user: ${user.userId}`);
           setConnectedPeers((prev) =>
             prev.includes(user.userId) ? prev : [...prev, user.userId]
           );
 
           // Auto-start call if we have local media
           if (localStreamRef.current) {
-            console.log(`Auto-calling existing user: ${user.userId}`);
+            console.log(`📞 Auto-calling existing user: ${user.userId}`);
             await startCallWith(user.userId);
+          } else {
+            console.log(`⏳ Waiting for local media to call ${user.userId}`);
           }
         }
       }
@@ -150,18 +186,21 @@ export function useWebRTC(
       userId: string;
       socketId: string;
     }) => {
-      console.log("New user joined:", payload);
+      console.log("👋 New user joined:", payload);
       setConnectedPeers((prev) =>
         prev.includes(payload.userId) ? prev : [...prev, payload.userId]
       );
 
       // Auto-start call if we have local media
       if (localStreamRef.current) {
-        console.log(`Auto-calling new user: ${payload.userId}`);
+        console.log(`📞 Auto-calling new user: ${payload.userId}`);
         await startCallWith(payload.userId);
+      } else {
+        console.log(`⏳ Waiting for local media to call ${payload.userId}`);
       }
     };
     const onUserLeft = (payload: { userId: string }) => {
+      console.log("👋 User left:", payload.userId);
       setConnectedPeers((prev) => prev.filter((p) => p !== payload.userId));
       const pc = pcRef.current.get(payload.userId);
       pc?.close();
@@ -176,33 +215,82 @@ export function useWebRTC(
       offer: RTCSessionDescriptionInit;
       fromUserId: string;
     }) => {
+      console.log(`📥 Received offer from ${payload.fromUserId}`);
       let pc = pcRef.current.get(payload.fromUserId);
-      if (!pc) pc = createPeerConnection(payload.fromUserId);
-      await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit("answer", {
-        roomId,
-        targetUserId: payload.fromUserId,
-        answer
-      });
+      if (!pc) {
+        console.log(
+          `🔗 Creating new peer connection for ${payload.fromUserId}`
+        );
+        pc = createPeerConnection(payload.fromUserId);
+
+        // Add local tracks if available
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach((track) => {
+            pc.addTrack(track, localStreamRef.current!);
+          });
+        }
+      }
+
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        console.log(`📤 Sending answer to ${payload.fromUserId}`);
+        socket.emit("answer", {
+          roomId,
+          targetUserId: payload.fromUserId,
+          answer
+        });
+      } catch (error) {
+        console.error(
+          `❌ Error handling offer from ${payload.fromUserId}:`,
+          error
+        );
+      }
     };
     const onAnswer = async (payload: {
       answer: RTCSessionDescriptionInit;
       fromUserId: string;
     }) => {
+      console.log(`📥 Received answer from ${payload.fromUserId}`);
       const pc = pcRef.current.get(payload.fromUserId);
-      if (pc)
-        await pc.setRemoteDescription(
-          new RTCSessionDescription(payload.answer)
-        );
+      if (pc) {
+        try {
+          await pc.setRemoteDescription(
+            new RTCSessionDescription(payload.answer)
+          );
+          console.log(`✅ Answer processed for ${payload.fromUserId}`);
+        } catch (error) {
+          console.error(
+            `❌ Error processing answer from ${payload.fromUserId}:`,
+            error
+          );
+        }
+      } else {
+        console.warn(`⚠️ No peer connection found for ${payload.fromUserId}`);
+      }
     };
     const onCandidate = async (payload: {
       candidate: RTCIceCandidateInit;
       fromUserId: string;
     }) => {
+      console.log(`🧊 Received ICE candidate from ${payload.fromUserId}`);
       const pc = pcRef.current.get(payload.fromUserId);
-      if (pc) await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+      if (pc) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          console.log(`✅ ICE candidate added for ${payload.fromUserId}`);
+        } catch (error) {
+          console.error(
+            `❌ Error adding ICE candidate from ${payload.fromUserId}:`,
+            error
+          );
+        }
+      } else {
+        console.warn(
+          `⚠️ No peer connection found for ICE candidate from ${payload.fromUserId}`
+        );
+      }
     };
 
     socket.on("existing-users", onExistingUsers);
@@ -223,36 +311,104 @@ export function useWebRTC(
   }, [createPeerConnection, ensureSocket, roomId, startCallWith, userId]);
 
   const startScreenShare = useCallback(async () => {
-    const getDisplayMedia = (
-      navigator.mediaDevices as unknown as {
-        getDisplayMedia?: (c?: unknown) => Promise<MediaStream>;
+    try {
+      const getDisplayMedia = (
+        navigator.mediaDevices as unknown as {
+          getDisplayMedia?: (c?: unknown) => Promise<MediaStream>;
+        }
+      ).getDisplayMedia;
+      if (!getDisplayMedia)
+        throw new Error("getDisplayMedia is not supported in this browser");
+
+      const displayStream: MediaStream = await getDisplayMedia({
+        video: true
+      } as unknown);
+
+      const screenTrack = displayStream.getVideoTracks()[0];
+
+      // Replace video track in all peer connections
+      pcRef.current.forEach((pc) => {
+        const sender = pc
+          .getSenders()
+          .find((s) => s.track && s.track.kind === "video");
+        if (sender) sender.replaceTrack(screenTrack);
+      });
+
+      setScreenShareStream(displayStream);
+      setIsScreenSharing(true);
+
+      // Notify other users
+      socketRef.current?.emit("start-screen-share", { roomId, userId });
+
+      // Handle when user stops screen sharing
+      screenTrack.onended = () => {
+        if (screenShareStream) {
+          screenShareStream.getTracks().forEach((track) => track.stop());
+          setScreenShareStream(null);
+        }
+        setIsScreenSharing(false);
+
+        // Restore camera if available
+        if (localStreamRef.current) {
+          const videoTrack = localStreamRef.current.getVideoTracks()[0];
+          if (videoTrack) {
+            pcRef.current.forEach((pc) => {
+              const sender = pc
+                .getSenders()
+                .find((s) => s.track && s.track.kind === "video");
+              if (sender) sender.replaceTrack(videoTrack);
+            });
+          }
+        }
+
+        // Notify other users
+        socketRef.current?.emit("stop-screen-share", { roomId, userId });
+      };
+
+      return displayStream;
+    } catch (error) {
+      console.error("Error starting screen share:", error);
+      throw error;
+    }
+  }, [roomId, userId, screenShareStream]);
+
+  const stopScreenShare = useCallback(() => {
+    if (screenShareStream) {
+      screenShareStream.getTracks().forEach((track) => track.stop());
+      setScreenShareStream(null);
+    }
+    setIsScreenSharing(false);
+
+    // Restore camera if available
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        pcRef.current.forEach((pc) => {
+          const sender = pc
+            .getSenders()
+            .find((s) => s.track && s.track.kind === "video");
+          if (sender) sender.replaceTrack(videoTrack);
+        });
       }
-    ).getDisplayMedia;
-    if (!getDisplayMedia)
-      throw new Error("getDisplayMedia is not supported in this browser");
-    const displayStream: MediaStream = await getDisplayMedia({
-      video: true
-    } as unknown);
-    const screenTrack = displayStream.getVideoTracks()[0];
-    pcRef.current.forEach((pc) => {
-      const sender = pc
-        .getSenders()
-        .find((s) => s.track && s.track.kind === "video");
-      if (sender) sender.replaceTrack(screenTrack);
-    });
-    return displayStream;
-  }, []);
+    }
+
+    // Notify other users
+    socketRef.current?.emit("stop-screen-share", { roomId, userId });
+  }, [screenShareStream, roomId, userId]);
 
   return {
     socket: socketRef,
     localStreamRef,
     remoteStreams,
     connectedPeers,
+    isScreenSharing,
+    screenShareStream,
     joinRoom,
     leaveRoom,
     startLocalMedia,
     startCallWith,
     stopLocalTracks,
-    startScreenShare
+    startScreenShare,
+    stopScreenShare
   };
 }
