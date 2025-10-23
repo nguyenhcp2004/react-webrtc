@@ -123,7 +123,10 @@ export function useWebRTC(
     async (
       constraints: MediaStreamConstraints = { audio: true, video: true }
     ) => {
+      console.log("🎥 Requesting local media with constraints:", constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("🎥 Local media obtained:", stream);
+      console.log("🎥 Local stream tracks:", stream.getTracks());
       localStreamRef.current = stream;
       return stream;
     },

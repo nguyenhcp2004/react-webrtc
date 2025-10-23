@@ -93,7 +93,13 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
 
   useEffect(() => {
     if (localVideoRef.current && localStreamRef.current) {
+      console.log("🎥 Setting local stream:", localStreamRef.current);
       localVideoRef.current.srcObject = localStreamRef.current;
+
+      // Ensure the video plays
+      localVideoRef.current.play().catch((error) => {
+        console.warn("⚠️ Could not autoplay local video:", error);
+      });
     }
   });
 
@@ -103,6 +109,12 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
     console.log("📹 Connected peers:", connectedPeers);
   }, [remoteStreams, connectedPeers]);
 
+  // Debug local stream
+  useEffect(() => {
+    console.log("🎥 Local stream ref changed:", localStreamRef.current);
+    console.log("🎥 Local video ref:", localVideoRef.current);
+  });
+
   const handleJoin = async () => {
     console.log("Joining room...", { roomId, userId });
     await joinRoom();
@@ -111,9 +123,20 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
   };
 
   const handleStartMedia = async () => {
+    console.log("🎥 Starting local media...");
     const stream = await startLocalMedia();
-    console.log(`stream is ${JSON.stringify(stream)}`);
-    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+    console.log("🎥 Local stream obtained:", stream);
+    console.log("🎥 Stream tracks:", stream.getTracks());
+
+    // Ensure local video is set up immediately
+    if (localVideoRef.current && stream) {
+      console.log("🎥 Setting local video immediately");
+      localVideoRef.current.srcObject = stream;
+      localVideoRef.current.play().catch((error) => {
+        console.warn("⚠️ Could not autoplay local video immediately:", error);
+      });
+    }
+
     setStarted(true);
 
     // Auto-call existing peers
