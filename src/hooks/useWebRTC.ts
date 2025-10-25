@@ -37,19 +37,17 @@ export function useWebRTC(
         { urls: ["stun:stun3.l.google.com:19302"] },
         { urls: ["stun:stun4.l.google.com:19302"] },
 
-        // Free TURN servers (no authentication required)
-        { urls: ["turn:openrelay.metered.ca:80"] },
-        { urls: ["turn:openrelay.metered.ca:443"] },
-        { urls: ["turn:openrelay.metered.ca:443?transport=tcp"] },
-
-        // Additional free TURN servers
-        { urls: ["turn:freeturn.tel:3478"] },
-        { urls: ["turn:freeturn.tel:3478?transport=tcp"] },
-
-        // More free TURN servers
-        { urls: ["turn:relay.metered.ca:80"] },
-        { urls: ["turn:relay.metered.ca:443"] },
-        { urls: ["turn:relay.metered.ca:443?transport=tcp"] }
+        // ExpressTurn TURN server with authentication
+        {
+          urls: ["turn:relay1.expressturn.com:3480"],
+          username: "000000002076717913",
+          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+        },
+        {
+          urls: ["turn:relay1.expressturn.com:3480?transport=tcp"],
+          username: "000000002076717913",
+          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+        }
       ],
       iceCandidatePoolSize: 10
     }),
