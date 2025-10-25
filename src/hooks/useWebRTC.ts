@@ -30,11 +30,26 @@ export function useWebRTC(
   const rtcConfig = useMemo<RTCConfiguration>(
     () => ({
       iceServers: iceServers ?? [
+        // STUN servers
         { urls: ["stun:stun.l.google.com:19302"] },
         { urls: ["stun:stun1.l.google.com:19302"] },
         { urls: ["stun:stun2.l.google.com:19302"] },
         { urls: ["stun:stun3.l.google.com:19302"] },
-        { urls: ["stun:stun4.l.google.com:19302"] }
+        { urls: ["stun:stun4.l.google.com:19302"] },
+
+        // Free TURN servers (no authentication required)
+        { urls: ["turn:openrelay.metered.ca:80"] },
+        { urls: ["turn:openrelay.metered.ca:443"] },
+        { urls: ["turn:openrelay.metered.ca:443?transport=tcp"] },
+
+        // Additional free TURN servers
+        { urls: ["turn:freeturn.tel:3478"] },
+        { urls: ["turn:freeturn.tel:3478?transport=tcp"] },
+
+        // More free TURN servers
+        { urls: ["turn:relay.metered.ca:80"] },
+        { urls: ["turn:relay.metered.ca:443"] },
+        { urls: ["turn:relay.metered.ca:443?transport=tcp"] }
       ],
       iceCandidatePoolSize: 10
     }),
