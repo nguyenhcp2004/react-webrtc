@@ -36,12 +36,6 @@ export function useWebRTC(
     () => ({
       iceServers: iceServers ?? [
         // STUN servers
-        { urls: ["stun:stun.l.google.com:19302"] },
-        { urls: ["stun:stun1.l.google.com:19302"] },
-        { urls: ["stun:stun2.l.google.com:19302"] },
-        { urls: ["stun:stun3.l.google.com:19302"] },
-        { urls: ["stun:stun4.l.google.com:19302"] },
-
         // ExpressTurn TURN server with authentication
         {
           urls: ["turn:relay1.expressturn.com:3480"],
