@@ -307,6 +307,7 @@ export function useWebRTC(
     }) => {
       console.log(`📥 Received offer from ${payload.fromUserId}`);
       let pc = pcRef.current.get(payload.fromUserId);
+
       if (!pc) {
         console.log(
           `🔗 Creating new peer connection for ${payload.fromUserId}`
@@ -315,38 +316,47 @@ export function useWebRTC(
       }
 
       if (pc) {
-        // Add local tracks if available
-        if (localStreamRef.current && pc) {
-          console.log(
-            `📹 Adding local tracks to existing PC for ${payload.fromUserId}`
-          );
-          localStreamRef.current.getTracks().forEach((track) => {
-            try {
-              pc!.addTrack(track, localStreamRef.current!);
-              console.log(
-                `✅ Added ${track.kind} track to existing PC for ${payload.fromUserId}`
-              );
-            } catch (error) {
-              console.error(
-                `❌ Error adding ${track.kind} track to existing PC for ${payload.fromUserId}:`,
-                error
-              );
-            }
-          });
-        } else {
-          console.warn(
-            `⚠️ No local stream available for existing PC for ${payload.fromUserId}`
-          );
-        }
-      }
-
-      if (pc) {
         try {
+          // Step 1: Set remote description first
           await pc.setRemoteDescription(
             new RTCSessionDescription(payload.offer)
           );
           console.log(`✅ Set remote description for ${payload.fromUserId}`);
 
+          // Step 2: Add local tracks if available and not already added
+          if (localStreamRef.current) {
+            const existingSenders = pc.getSenders();
+
+            // Only add tracks if we don't have senders yet (new connection)
+            if (existingSenders.length === 0) {
+              console.log(
+                `📹 Adding local tracks to PC for ${payload.fromUserId}`
+              );
+              localStreamRef.current.getTracks().forEach((track) => {
+                try {
+                  pc!.addTrack(track, localStreamRef.current!);
+                  console.log(
+                    `✅ Added ${track.kind} track to PC for ${payload.fromUserId}`
+                  );
+                } catch (error) {
+                  console.error(
+                    `❌ Error adding ${track.kind} track to PC for ${payload.fromUserId}:`,
+                    error
+                  );
+                }
+              });
+            } else {
+              console.log(
+                `ℹ️ Tracks already added for ${payload.fromUserId} (${existingSenders.length} senders), skipping`
+              );
+            }
+          } else {
+            console.warn(
+              `⚠️ No local stream available for PC for ${payload.fromUserId}`
+            );
+          }
+
+          // Step 3: Create and send answer
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           console.log(`📤 Sending answer to ${payload.fromUserId}`);
