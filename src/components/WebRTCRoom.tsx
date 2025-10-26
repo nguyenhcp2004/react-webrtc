@@ -38,7 +38,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
     toggleAudio,
     toggleVideo,
     startScreenShare,
-    stopScreenShare,
+    stopScreenShare
   } = useWebRTC(roomId, userId, { signalingUrl });
 
   useEffect(() => {
@@ -67,7 +67,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           kind: t.kind,
           enabled: t.enabled,
           muted: t.muted,
-          readyState: t.readyState,
+          readyState: t.readyState
         }))
       );
     });
@@ -90,8 +90,13 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
     if (localVideoRef.current && stream) {
       console.log("🎥 Setting local video immediately");
       localVideoRef.current.srcObject = stream;
+      // autoPlay attribute on video element will handle playback
+      // Only call play() if autoPlay fails due to user gesture requirement
       localVideoRef.current.play().catch((error) => {
-        console.warn("⚠️ Could not autoplay local video immediately:", error);
+        // Silently handle AbortError - it's a race condition when updating srcObject
+        if (error.name !== "AbortError") {
+          console.warn("⚠️ Could not autoplay local video immediately:", error);
+        }
       });
     }
 
@@ -122,7 +127,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
         display: "grid",
         gap: 12,
         minHeight: "100vh",
-        position: "relative",
+        position: "relative"
       }}
     >
       {/* Screen Share Notification */}
@@ -146,7 +151,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
             boxShadow: "0 8px 32px rgba(240, 147, 251, 0.5)",
             border: "2px solid rgba(255,255,255,0.3)",
             backdropFilter: "blur(20px)",
-            animation: "slideDown 0.5s ease",
+            animation: "slideDown 0.5s ease"
           }}
         >
           <span style={{ fontSize: "20px" }}>🖥️</span>
@@ -162,7 +167,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               fontSize: "12px",
               fontWeight: "600",
               cursor: "pointer",
-              transition: "all 0.3s ease",
+              transition: "all 0.3s ease"
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "rgba(255,255,255,0.3)";
@@ -187,7 +192,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
             flexDirection: "column",
             gap: "8px",
             zIndex: 1000,
-            animation: "slideInRight 0.5s ease",
+            animation: "slideInRight 0.5s ease"
           }}
         >
           {Object.entries(remoteScreenShares).map(([peerId, isSharing]) =>
@@ -207,7 +212,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                   gap: "8px",
                   boxShadow: "0 4px 16px rgba(250, 112, 154, 0.4)",
                   border: "2px solid rgba(255,255,255,0.3)",
-                  backdropFilter: "blur(20px)",
+                  backdropFilter: "blur(20px)"
                 }}
               >
                 <span style={{ fontSize: "16px" }}>🖥️</span>
@@ -224,27 +229,27 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           display: "flex",
           gap: 8,
           flexWrap: "wrap",
-          alignItems: "center",
+          alignItems: "center"
         }}
       >
         <input
           value={roomId}
           onChange={(e) => setRoomId(e.target.value)}
-          placeholder='room id'
+          placeholder="room id"
           style={{
             padding: "8px 12px",
             borderRadius: "6px",
-            border: "1px solid #ddd",
+            border: "1px solid #ddd"
           }}
         />
         <input
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
-          placeholder='your id'
+          placeholder="your id"
           style={{
             padding: "8px 12px",
             borderRadius: "6px",
-            border: "1px solid #ddd",
+            border: "1px solid #ddd"
           }}
         />
         {!joined ? (
@@ -256,7 +261,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "white",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer",
+              cursor: "pointer"
             }}
           >
             Join
@@ -270,7 +275,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "white",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer",
+              cursor: "pointer"
             }}
           >
             Leave
@@ -285,7 +290,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "white",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer",
+              cursor: "pointer"
             }}
           >
             Start Camera
@@ -300,7 +305,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "#333",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer",
+              cursor: "pointer"
             }}
           >
             Call Peers
@@ -314,7 +319,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                 userId,
                 connectedPeers,
                 remoteStreams: Object.keys(remoteStreams),
-                socketId: socket?.current?.id,
+                socketId: socket?.current?.id
               });
               socket?.current?.emit("debug-room-state", { roomId });
             }}
@@ -324,7 +329,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "white",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer",
+              cursor: "pointer"
             }}
           >
             Debug
@@ -339,7 +344,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           color: "#666",
           background: "#f8f9fa",
           padding: "12px",
-          borderRadius: "6px",
+          borderRadius: "6px"
         }}
       >
         <div>
@@ -365,7 +370,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               : "repeat(auto-fit, minmax(320px, 1fr))",
           gap: 16,
           flex: 1,
-          minHeight: "400px",
+          minHeight: "400px"
         }}
       >
         {/* Local Video */}
@@ -376,7 +381,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
             overflow: "hidden",
             position: "relative",
             boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
-            transition: "transform 0.3s ease",
+            transition: "transform 0.3s ease"
           }}
         >
           {/* Header Badge */}
@@ -398,7 +403,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               display: "flex",
               alignItems: "center",
               gap: "6px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
             }}
           >
             {isScreenSharing ? "🖥️ Screen Share" : "👤 You"}
@@ -412,7 +417,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               right: 12,
               zIndex: 10,
               display: "flex",
-              gap: "8px",
+              gap: "8px"
             }}
           >
             {!isAudioEnabled && (
@@ -429,9 +434,9 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: "14px",
-                  boxShadow: "0 4px 12px rgba(220, 53, 69, 0.4)",
+                  boxShadow: "0 4px 12px rgba(220, 53, 69, 0.4)"
                 }}
-                title='Microphone Off'
+                title="Microphone Off"
               >
                 🔇
               </div>
@@ -450,9 +455,9 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: "14px",
-                  boxShadow: "0 4px 12px rgba(220, 53, 69, 0.4)",
+                  boxShadow: "0 4px 12px rgba(220, 53, 69, 0.4)"
                 }}
-                title='Camera Off'
+                title="Camera Off"
               >
                 📷
               </div>
@@ -468,7 +473,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               width: "100%",
               height: "240px",
               objectFit: "cover",
-              filter: !isVideoEnabled ? "blur(20px)" : "none",
+              filter: !isVideoEnabled ? "blur(20px)" : "none"
             }}
             onLoadedMetadata={() => {
               console.log("✅ Local video loaded");
@@ -488,7 +493,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                 alignItems: "center",
                 justifyContent: "center",
                 background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                fontSize: "48px",
+                fontSize: "48px"
               }}
             >
               👤
@@ -513,7 +518,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                 fontSize: "16px",
                 fontWeight: "600",
                 gap: "12px",
-                boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
               }}
             >
               <div style={{ fontSize: "48px", animation: "pulse 2s infinite" }}>
@@ -535,7 +540,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                 overflow: "hidden",
                 position: "relative",
                 boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
-                transition: "transform 0.3s ease",
+                transition: "transform 0.3s ease"
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "scale(1.02)";
@@ -563,7 +568,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                   display: "flex",
                   alignItems: "center",
                   gap: "6px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
                 }}
               >
                 {isRemoteScreenSharing ? "🖥️" : "👤"} {peerId}
@@ -588,7 +593,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                     alignItems: "center",
                     gap: "4px",
                     boxShadow: "0 4px 12px rgba(255, 193, 7, 0.4)",
-                    animation: "pulse 2s infinite",
+                    animation: "pulse 2s infinite"
                   }}
                 >
                   ✨ Presenting
@@ -602,7 +607,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                   width: "100%",
                   height: "240px",
                   objectFit: isRemoteScreenSharing ? "contain" : "cover",
-                  background: "#000",
+                  background: "#000"
                 }}
                 ref={(el) => {
                   if (el && stream) {
@@ -617,17 +622,11 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                         active: stream.active,
                         tracks: stream.getTracks().length,
                         videoTracks: stream.getVideoTracks().length,
-                        audioTracks: stream.getAudioTracks().length,
+                        audioTracks: stream.getAudioTracks().length
                       });
                       el.srcObject = stream;
-
-                      // Only call play() after setting new stream
-                      el.play().catch((error) => {
-                        console.warn(
-                          `⚠️ Could not autoplay remote video for ${peerId}:`,
-                          error
-                        );
-                      });
+                      // Don't manually call play() - autoPlay attribute handles it
+                      // This avoids conflicts when stream updates rapidly
                     }
                   }
                 }}
