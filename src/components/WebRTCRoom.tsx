@@ -3,62 +3,6 @@ import { useWebRTC } from "../hooks/useWebRTC";
 import Chat from "./Chat";
 import MeetingControls from "./MeetingControls";
 
-// RemoteVideo component to properly handle remote streams
-function RemoteVideo({
-  peerId,
-  stream,
-}: {
-  peerId: string;
-  stream: MediaStream;
-}) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      console.log(`🎥 Setting remote stream for ${peerId}:`, stream);
-      videoRef.current.srcObject = stream;
-
-      // Ensure the video plays
-      videoRef.current.play().catch((error) => {
-        console.warn(`⚠️ Could not autoplay video for ${peerId}:`, error);
-      });
-    }
-  }, [stream, peerId]);
-
-  return (
-    <div
-      style={{
-        background: "#000",
-        borderRadius: "8px",
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 8,
-          left: 8,
-          background: "rgba(0,0,0,0.7)",
-          color: "white",
-          padding: "4px 8px",
-          borderRadius: "4px",
-          fontSize: "12px",
-          zIndex: 10,
-        }}
-      >
-        {peerId}
-      </div>
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        style={{ width: "100%", height: "200px", objectFit: "cover" }}
-      />
-    </div>
-  );
-}
-
 type Props = {
   signalingUrl: string;
 };
