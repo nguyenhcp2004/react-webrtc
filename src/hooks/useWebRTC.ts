@@ -29,7 +29,27 @@ export function useWebRTC(
 
   const rtcConfig = useMemo<RTCConfiguration>(
     () => ({
-      iceServers: iceServers ?? [{ urls: ["stun:stun.l.google.com:19302"] }],
+      iceServers: iceServers ?? [
+        // STUN servers
+        { urls: ["stun:stun.l.google.com:19302"] },
+        { urls: ["stun:stun1.l.google.com:19302"] },
+        { urls: ["stun:stun2.l.google.com:19302"] },
+        { urls: ["stun:stun3.l.google.com:19302"] },
+        { urls: ["stun:stun4.l.google.com:19302"] },
+
+        // ExpressTurn TURN server with authentication
+        {
+          urls: ["turn:relay1.expressturn.com:3480"],
+          username: "000000002076717913",
+          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+        },
+        {
+          urls: ["turn:relay1.expressturn.com:3480?transport=tcp"],
+          username: "000000002076717913",
+          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+        }
+      ],
+      iceCandidatePoolSize: 10
     }),
     [iceServers]
   );
@@ -73,14 +93,31 @@ export function useWebRTC(
       };
 
       pc.ontrack = (e) => {
-        console.log(`📹 Received track from ${peerUserId}:`, e.streams[0]);
-        const stream = e.streams[0];
-        console.log(`📹 Setting remote stream for ${peerUserId}:`, stream);
-        setRemoteStreams((prev) => {
-          const newStreams = { ...prev, [peerUserId]: stream };
-          console.log(`📹 Updated remote streams:`, newStreams);
-          return newStreams;
+        console.log(`📹 Received track from ${peerUserId}:`, e);
+        console.log(`📹 Track details:`, {
+          kind: e.track.kind,
+          enabled: e.track.enabled,
+          muted: e.track.muted,
+          readyState: e.track.readyState,
+          streams: e.streams.length
         });
+
+        if (e.streams && e.streams.length > 0) {
+          const stream = e.streams[0];
+          console.log(`📹 Stream details:`, {
+            id: stream.id,
+            active: stream.active,
+            tracks: stream.getTracks().length
+          });
+
+          setRemoteStreams((prev) => {
+            const newStreams = { ...prev, [peerUserId]: stream };
+            console.log(`✅ Remote stream set for ${peerUserId}`, newStreams);
+            return newStreams;
+          });
+        } else {
+          console.error(`❌ No stream in ontrack event for ${peerUserId}`);
+        }
       };
 
       pc.onconnectionstatechange = () => {
@@ -142,8 +179,26 @@ export function useWebRTC(
       // Add local tracks to the new peer connection
       if (localStreamRef.current) {
         console.log(`📹 Adding local tracks to ${peerUserId}`);
+        console.log(
+          `📹 Local stream tracks:`,
+          localStreamRef.current.getTracks().map((t) => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState
+          }))
+        );
+
         localStreamRef.current.getTracks().forEach((track) => {
-          pc.addTrack(track, localStreamRef.current!);
+          try {
+            pc.addTrack(track, localStreamRef.current!);
+            console.log(`✅ Added ${track.kind} track to ${peerUserId}`);
+          } catch (error) {
+            console.error(
+              `❌ Error adding ${track.kind} track to ${peerUserId}:`,
+              error
+            );
+          }
         });
       } else {
         console.warn(`⚠️ No local stream available for ${peerUserId}`);
@@ -234,22 +289,44 @@ export function useWebRTC(
 
       if (pc) {
         // Add local tracks if available
-        if (localStreamRef.current) {
+        if (localStreamRef.current && pc) {
+          console.log(
+            `📹 Adding local tracks to existing PC for ${payload.fromUserId}`
+          );
           localStreamRef.current.getTracks().forEach((track) => {
-            pc.addTrack(track, localStreamRef.current!);
+            try {
+              pc!.addTrack(track, localStreamRef.current!);
+              console.log(
+                `✅ Added ${track.kind} track to existing PC for ${payload.fromUserId}`
+              );
+            } catch (error) {
+              console.error(
+                `❌ Error adding ${track.kind} track to existing PC for ${payload.fromUserId}:`,
+                error
+              );
+            }
           });
+        } else {
+          console.warn(
+            `⚠️ No local stream available for existing PC for ${payload.fromUserId}`
+          );
         }
+      }
+
+      if (pc) {
         try {
           await pc.setRemoteDescription(
             new RTCSessionDescription(payload.offer)
           );
+          console.log(`✅ Set remote description for ${payload.fromUserId}`);
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           console.log(`📤 Sending answer to ${payload.fromUserId}`);
           socket.emit("answer", {
             roomId,
             targetUserId: payload.fromUserId,
-            answer,
+            answer
           });
         } catch (error) {
           console.error(
@@ -308,12 +385,17 @@ export function useWebRTC(
       }
     };
 
+    const onRoomStateDebug = (data: unknown) => {
+      console.log("🔍 Room state debug:", data);
+    };
+
     socket.on("existing-users", onExistingUsers);
     socket.on("user-joined", onUserJoined);
     socket.on("user-left", onUserLeft);
     socket.on("offer", onOffer);
     socket.on("answer", onAnswer);
     socket.on("ice-candidate", onCandidate);
+    socket.on("room-state-debug", onRoomStateDebug);
 
     return () => {
       socket.off("existing-users", onExistingUsers);
@@ -322,6 +404,7 @@ export function useWebRTC(
       socket.off("offer", onOffer);
       socket.off("answer", onAnswer);
       socket.off("ice-candidate", onCandidate);
+      socket.off("room-state-debug", onRoomStateDebug);
     };
   }, [createPeerConnection, ensureSocket, roomId, startCallWith, userId]);
 

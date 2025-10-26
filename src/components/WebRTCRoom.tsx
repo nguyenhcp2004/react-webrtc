@@ -93,27 +93,27 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
 
   useEffect(() => {
     if (localVideoRef.current && localStreamRef.current) {
-      console.log("🎥 Setting local stream:", localStreamRef.current);
+      console.log("🎥 Setting local video stream:", localStreamRef.current);
       localVideoRef.current.srcObject = localStreamRef.current;
-
-      // Ensure the video plays
-      localVideoRef.current.play().catch((error) => {
-        console.warn("⚠️ Could not autoplay local video:", error);
-      });
     }
-  });
+  }, [localStreamRef]);
 
   // Debug remote streams
   useEffect(() => {
-    console.log("📹 Remote streams changed:", remoteStreams);
-    console.log("📹 Connected peers:", connectedPeers);
-  }, [remoteStreams, connectedPeers]);
-
-  // Debug local stream
-  useEffect(() => {
-    console.log("🎥 Local stream ref changed:", localStreamRef.current);
-    console.log("🎥 Local video ref:", localVideoRef.current);
-  });
+    console.log("📹 Remote streams updated:", Object.keys(remoteStreams));
+    Object.entries(remoteStreams).forEach(([peerId, stream]) => {
+      console.log(`📹 Remote stream for ${peerId}:`, stream);
+      console.log(
+        `📹 Stream tracks:`,
+        stream.getTracks().map((t) => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          muted: t.muted,
+          readyState: t.readyState
+        }))
+      );
+    });
+  }, [remoteStreams]);
 
   const handleJoin = async () => {
     console.log("Joining room...", { roomId, userId });
@@ -248,6 +248,30 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
             Call Peers
           </button>
         )}
+        {joined && (
+          <button
+            onClick={() => {
+              console.log("🔍 Debug info:", {
+                roomId,
+                userId,
+                connectedPeers,
+                remoteStreams: Object.keys(remoteStreams),
+                socketId: socket?.current?.id
+              });
+              socket?.current?.emit("debug-room-state", { roomId });
+            }}
+            style={{
+              padding: "8px 16px",
+              background: "#6c757d",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer"
+            }}
+          >
+            Debug
+          </button>
+        )}
       </div>
 
       {/* Status */}
@@ -261,24 +285,29 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
         }}
       >
         <div>
-          Status: {joined ? "Joined" : "Not joined"} |{" "}
-          {started ? "Media started" : "No media"}
-          {isScreenSharing && " | Screen sharing"}
-          {isRecording && " | Recording"}
+          Status: {joined ? "✅ Joined" : "❌ Not joined"} |{" "}
+          {started ? "📹 Media started" : "📷 No media"}
+          {isScreenSharing && " | 🖥️ Screen sharing"}
+          {isRecording && " | 🔴 Recording"}
         </div>
         <div>
           Connected peers: {connectedPeers.length} ({connectedPeers.join(", ")})
         </div>
         <div>Remote streams: {Object.keys(remoteStreams).length}</div>
+        <div>Remote stream IDs: {Object.keys(remoteStreams).join(", ")}</div>
       </div>
 
       {/* Video Grid */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: 12,
+          gridTemplateColumns:
+            Object.keys(remoteStreams).length === 1
+              ? "1fr 1fr"
+              : "repeat(auto-fit, minmax(320px, 1fr))",
+          gap: 16,
           flex: 1,
+          minHeight: "400px"
         }}
       >
         {/* Local Video */}
@@ -310,13 +339,93 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
             autoPlay
             playsInline
             muted
-            style={{ width: "100%", height: "200px", objectFit: "cover" }}
+            style={{ width: "100%", height: "240px", objectFit: "cover" }}
+            onLoadedMetadata={() => {
+              console.log("✅ Local video loaded");
+            }}
+            onError={(e) => {
+              console.error("❌ Local video error:", e);
+            }}
           />
         </div>
 
         {/* Remote Videos */}
+        {Object.entries(remoteStreams).length === 0 &&
+          connectedPeers.length > 0 && (
+            <div
+              style={{
+                background: "#f8f9fa",
+                border: "2px dashed #dee2e6",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "240px",
+                color: "#6c757d",
+                fontSize: "16px"
+              }}
+            >
+              Waiting for remote video...
+            </div>
+          )}
         {Object.entries(remoteStreams).map(([peerId, stream]) => (
-          <RemoteVideo key={peerId} peerId={peerId} stream={stream} />
+          <div
+            key={peerId}
+            style={{
+              background: "#000",
+              borderRadius: "8px",
+              overflow: "hidden",
+              position: "relative"
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 8,
+                left: 8,
+                background: "rgba(0,0,0,0.7)",
+                color: "white",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                fontSize: "12px",
+                zIndex: 10
+              }}
+            >
+              {peerId}
+            </div>
+            <video
+              autoPlay
+              playsInline
+              style={{ width: "100%", height: "240px", objectFit: "cover" }}
+              ref={(el) => {
+                if (el && stream) {
+                  console.log(`🎥 Setting remote video for ${peerId}:`, stream);
+                  console.log(`🎥 Stream details:`, {
+                    id: stream.id,
+                    active: stream.active,
+                    tracks: stream.getTracks().length,
+                    videoTracks: stream.getVideoTracks().length,
+                    audioTracks: stream.getAudioTracks().length
+                  });
+                  el.srcObject = stream;
+
+                  // Force play
+                  el.play().catch((error) => {
+                    console.warn(
+                      `⚠️ Could not autoplay remote video for ${peerId}:`,
+                      error
+                    );
+                  });
+                }
+              }}
+              onLoadedMetadata={() => {
+                console.log(`✅ Remote video loaded for ${peerId}`);
+              }}
+              onError={(e) => {
+                console.error(`❌ Remote video error for ${peerId}:`, e);
+              }}
+            />
+          </div>
         ))}
       </div>
 
