@@ -606,26 +606,29 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                 }}
                 ref={(el) => {
                   if (el && stream) {
-                    console.log(
-                      `🎥 Setting remote video for ${peerId}:`,
-                      stream
-                    );
-                    console.log(`🎥 Stream details:`, {
-                      id: stream.id,
-                      active: stream.active,
-                      tracks: stream.getTracks().length,
-                      videoTracks: stream.getVideoTracks().length,
-                      audioTracks: stream.getAudioTracks().length,
-                    });
-                    el.srcObject = stream;
-
-                    // Force play
-                    el.play().catch((error) => {
-                      console.warn(
-                        `⚠️ Could not autoplay remote video for ${peerId}:`,
-                        error
+                    // Only set srcObject if it's different to avoid interrupting playback
+                    if (el.srcObject !== stream) {
+                      console.log(
+                        `🎥 Setting remote video for ${peerId}:`,
+                        stream
                       );
-                    });
+                      console.log(`🎥 Stream details:`, {
+                        id: stream.id,
+                        active: stream.active,
+                        tracks: stream.getTracks().length,
+                        videoTracks: stream.getVideoTracks().length,
+                        audioTracks: stream.getAudioTracks().length,
+                      });
+                      el.srcObject = stream;
+
+                      // Only call play() after setting new stream
+                      el.play().catch((error) => {
+                        console.warn(
+                          `⚠️ Could not autoplay remote video for ${peerId}:`,
+                          error
+                        );
+                      });
+                    }
                   }
                 }}
                 onLoadedMetadata={() => {
