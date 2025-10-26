@@ -37,15 +37,23 @@ export function useWebRTC(
       iceServers: iceServers ?? [
         // STUN servers
         // ExpressTurn TURN server with authentication
+        // {
+        //   urls: ["turn:relay1.expressturn.com:3480"],
+        //   username: "000000002076717913",
+        //   credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA=",
+        // },
+        // {
+        //   urls: ["turn:relay1.expressturn.com:3480?transport=tcp"],
+        //   username: "000000002076717913",
+        //   credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA=",
+        // },
         {
-          urls: ["turn:relay1.expressturn.com:3480"],
-          username: "000000002076717913",
-          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA=",
+          urls: "stun:stun.stunprotocol.org",
         },
         {
-          urls: ["turn:relay1.expressturn.com:3480?transport=tcp"],
-          username: "000000002076717913",
-          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA=",
+          urls: "turn:numb.viagenie.ca",
+          credential: "muazkh",
+          username: "webrtc@live.com",
         },
       ],
       iceCandidatePoolSize: 10,
