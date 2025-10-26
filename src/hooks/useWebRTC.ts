@@ -41,15 +41,38 @@ export function useWebRTC(
         { urls: ["stun:stun.rixtelecom.se"] },
 
         // ExpressTurn TURN server with authentication
+        // {
+        //   urls: ["turn:relay1.expressturn.com:3480"],
+        //   username: "000000002076717913",
+        //   credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+        // },
+        // {
+        //   urls: ["turn:relay1.expressturn.com:3480?transport=tcp"],
+        //   username: "000000002076717913",
+        //   credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+        // }
         {
-          urls: ["turn:relay1.expressturn.com:3480"],
-          username: "000000002076717913",
-          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+          urls: "stun:stun.relay.metered.ca:80"
         },
         {
-          urls: ["turn:relay1.expressturn.com:3480?transport=tcp"],
-          username: "000000002076717913",
-          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+          urls: "turn:sg.relay.metered.ca:80",
+          username: "ce7e305ee5978a6e226b86c8",
+          credential: "hWphRx79NhBy3EXy"
+        },
+        {
+          urls: "turn:sg.relay.metered.ca:80?transport=tcp",
+          username: "ce7e305ee5978a6e226b86c8",
+          credential: "hWphRx79NhBy3EXy"
+        },
+        {
+          urls: "turn:sg.relay.metered.ca:443",
+          username: "ce7e305ee5978a6e226b86c8",
+          credential: "hWphRx79NhBy3EXy"
+        },
+        {
+          urls: "turns:sg.relay.metered.ca:443?transport=tcp",
+          username: "ce7e305ee5978a6e226b86c8",
+          credential: "hWphRx79NhBy3EXy"
         }
       ],
       iceCandidatePoolSize: 10
