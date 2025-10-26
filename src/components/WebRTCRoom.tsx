@@ -26,21 +26,35 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
     remoteStreams,
     connectedPeers,
     isScreenSharing,
+    screenShareStream,
+    remoteScreenShares,
+    isAudioEnabled,
+    isVideoEnabled,
     joinRoom,
     leaveRoom,
     startLocalMedia,
     startCallWith,
     stopLocalTracks,
+    toggleAudio,
+    toggleVideo,
     startScreenShare,
     stopScreenShare,
   } = useWebRTC(roomId, userId, { signalingUrl });
 
   useEffect(() => {
-    if (localVideoRef.current && localStreamRef.current) {
-      console.log("🎥 Setting local video stream:", localStreamRef.current);
-      localVideoRef.current.srcObject = localStreamRef.current;
+    if (localVideoRef.current) {
+      // Prioritize screen share stream for local view
+      const streamToShow =
+        isScreenSharing && screenShareStream
+          ? screenShareStream
+          : localStreamRef.current;
+
+      if (streamToShow) {
+        console.log("🎥 Setting local video stream:", streamToShow);
+        localVideoRef.current.srcObject = streamToShow;
+      }
     }
-  }, [localStreamRef]);
+  }, [localStreamRef, isScreenSharing, screenShareStream]);
 
   // Debug remote streams
   useEffect(() => {
@@ -53,7 +67,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           kind: t.kind,
           enabled: t.enabled,
           muted: t.muted,
-          readyState: t.readyState
+          readyState: t.readyState,
         }))
       );
     });
@@ -103,7 +117,107 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
   };
 
   return (
-    <div style={{ display: "grid", gap: 12, minHeight: "100vh" }}>
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+        minHeight: "100vh",
+        position: "relative",
+      }}
+    >
+      {/* Screen Share Notification */}
+      {isScreenSharing && (
+        <div
+          style={{
+            position: "fixed",
+            top: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+            color: "white",
+            padding: "12px 24px",
+            borderRadius: "30px",
+            fontSize: "14px",
+            fontWeight: "700",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            zIndex: 1000,
+            boxShadow: "0 8px 32px rgba(240, 147, 251, 0.5)",
+            border: "2px solid rgba(255,255,255,0.3)",
+            backdropFilter: "blur(20px)",
+            animation: "slideDown 0.5s ease",
+          }}
+        >
+          <span style={{ fontSize: "20px" }}>🖥️</span>
+          <span>You are sharing your screen</span>
+          <button
+            onClick={stopScreenShare}
+            style={{
+              background: "rgba(255,255,255,0.2)",
+              color: "white",
+              border: "none",
+              borderRadius: "20px",
+              padding: "6px 12px",
+              fontSize: "12px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.3)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+            }}
+          >
+            Stop Sharing
+          </button>
+        </div>
+      )}
+
+      {/* Remote Screen Share Notifications */}
+      {Object.entries(remoteScreenShares).length > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            top: isScreenSharing ? 80 : 20,
+            right: 20,
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            zIndex: 1000,
+            animation: "slideInRight 0.5s ease",
+          }}
+        >
+          {Object.entries(remoteScreenShares).map(([peerId, isSharing]) =>
+            isSharing ? (
+              <div
+                key={peerId}
+                style={{
+                  background:
+                    "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+                  color: "#333",
+                  padding: "10px 16px",
+                  borderRadius: "25px",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  boxShadow: "0 4px 16px rgba(250, 112, 154, 0.4)",
+                  border: "2px solid rgba(255,255,255,0.3)",
+                  backdropFilter: "blur(20px)",
+                }}
+              >
+                <span style={{ fontSize: "16px" }}>🖥️</span>
+                <span>{peerId} is presenting</span>
+              </div>
+            ) : null
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div
         style={{
@@ -200,7 +314,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
                 userId,
                 connectedPeers,
                 remoteStreams: Object.keys(remoteStreams),
-                socketId: socket?.current?.id
+                socketId: socket?.current?.id,
               });
               socket?.current?.emit("debug-room-state", { roomId });
             }}
@@ -210,7 +324,7 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               color: "white",
               border: "none",
               borderRadius: "6px",
-              cursor: "pointer"
+              cursor: "pointer",
             }}
           >
             Debug
@@ -251,39 +365,111 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               : "repeat(auto-fit, minmax(320px, 1fr))",
           gap: 16,
           flex: 1,
-          minHeight: "400px"
+          minHeight: "400px",
         }}
       >
         {/* Local Video */}
         <div
           style={{
-            background: "#000",
-            borderRadius: "8px",
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            borderRadius: "12px",
             overflow: "hidden",
             position: "relative",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+            transition: "transform 0.3s ease",
           }}
         >
+          {/* Header Badge */}
           <div
             style={{
               position: "absolute",
-              top: 8,
-              left: 8,
-              background: "rgba(0,0,0,0.7)",
+              top: 12,
+              left: 12,
+              background: isScreenSharing
+                ? "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+                : "rgba(0,0,0,0.7)",
+              backdropFilter: "blur(10px)",
               color: "white",
-              padding: "4px 8px",
-              borderRadius: "4px",
-              fontSize: "12px",
+              padding: "6px 12px",
+              borderRadius: "20px",
+              fontSize: "13px",
+              fontWeight: "600",
               zIndex: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
             }}
           >
-            {isScreenSharing ? "Screen Share" : "You"}
+            {isScreenSharing ? "🖥️ Screen Share" : "👤 You"}
           </div>
+
+          {/* Media Status Indicators */}
+          <div
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              zIndex: 10,
+              display: "flex",
+              gap: "8px",
+            }}
+          >
+            {!isAudioEnabled && (
+              <div
+                style={{
+                  background: "rgba(220, 53, 69, 0.9)",
+                  backdropFilter: "blur(10px)",
+                  color: "white",
+                  padding: "6px",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                  boxShadow: "0 4px 12px rgba(220, 53, 69, 0.4)",
+                }}
+                title='Microphone Off'
+              >
+                🔇
+              </div>
+            )}
+            {!isVideoEnabled && (
+              <div
+                style={{
+                  background: "rgba(220, 53, 69, 0.9)",
+                  backdropFilter: "blur(10px)",
+                  color: "white",
+                  padding: "6px",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                  boxShadow: "0 4px 12px rgba(220, 53, 69, 0.4)",
+                }}
+                title='Camera Off'
+              >
+                📷
+              </div>
+            )}
+          </div>
+
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
-            style={{ width: "100%", height: "240px", objectFit: "cover" }}
+            style={{
+              width: "100%",
+              height: "240px",
+              objectFit: "cover",
+              filter: !isVideoEnabled ? "blur(20px)" : "none",
+            }}
             onLoadedMetadata={() => {
               console.log("✅ Local video loaded");
             }}
@@ -291,6 +477,23 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
               console.error("❌ Local video error:", e);
             }}
           />
+
+          {/* No Video Placeholder */}
+          {!isVideoEnabled && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                fontSize: "48px",
+              }}
+            >
+              👤
+            </div>
+          )}
         </div>
 
         {/* Remote Videos */}
@@ -298,79 +501,143 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           connectedPeers.length > 0 && (
             <div
               style={{
-                background: "#f8f9fa",
-                border: "2px dashed #dee2e6",
-                borderRadius: "8px",
+                background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                border: "2px dashed rgba(255,255,255,0.3)",
+                borderRadius: "12px",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 minHeight: "240px",
-                color: "#6c757d",
-                fontSize: "16px"
+                color: "white",
+                fontSize: "16px",
+                fontWeight: "600",
+                gap: "12px",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
               }}
             >
-              Waiting for remote video...
+              <div style={{ fontSize: "48px", animation: "pulse 2s infinite" }}>
+                ⏳
+              </div>
+              <div>Waiting for remote video...</div>
             </div>
           )}
-        {Object.entries(remoteStreams).map(([peerId, stream]) => (
-          <div
-            key={peerId}
-            style={{
-              background: "#000",
-              borderRadius: "8px",
-              overflow: "hidden",
-              position: "relative"
-            }}
-          >
+        {Object.entries(remoteStreams).map(([peerId, stream]) => {
+          const isRemoteScreenSharing = remoteScreenShares[peerId];
+          return (
             <div
+              key={peerId}
               style={{
-                position: "absolute",
-                top: 8,
-                left: 8,
-                background: "rgba(0,0,0,0.7)",
-                color: "white",
-                padding: "4px 8px",
-                borderRadius: "4px",
-                fontSize: "12px",
-                zIndex: 10
+                background: isRemoteScreenSharing
+                  ? "linear-gradient(135deg, #fa709a 0%, #fee140 100%)"
+                  : "linear-gradient(135deg, #30cfd0 0%, #330867 100%)",
+                borderRadius: "12px",
+                overflow: "hidden",
+                position: "relative",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+                transition: "transform 0.3s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "scale(1.02)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
               }}
             >
-              {peerId}
-            </div>
-            <video
-              autoPlay
-              playsInline
-              style={{ width: "100%", height: "240px", objectFit: "cover" }}
-              ref={(el) => {
-                if (el && stream) {
-                  console.log(`🎥 Setting remote video for ${peerId}:`, stream);
-                  console.log(`🎥 Stream details:`, {
-                    id: stream.id,
-                    active: stream.active,
-                    tracks: stream.getTracks().length,
-                    videoTracks: stream.getVideoTracks().length,
-                    audioTracks: stream.getAudioTracks().length
-                  });
-                  el.srcObject = stream;
+              {/* Header Badge */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  left: 12,
+                  background: isRemoteScreenSharing
+                    ? "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+                    : "rgba(0,0,0,0.7)",
+                  backdropFilter: "blur(10px)",
+                  color: "white",
+                  padding: "6px 12px",
+                  borderRadius: "20px",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  zIndex: 10,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                }}
+              >
+                {isRemoteScreenSharing ? "🖥️" : "👤"} {peerId}
+              </div>
 
-                  // Force play
-                  el.play().catch((error) => {
-                    console.warn(
-                      `⚠️ Could not autoplay remote video for ${peerId}:`,
-                      error
+              {/* Screen Share Badge */}
+              {isRemoteScreenSharing && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    background: "rgba(255, 193, 7, 0.95)",
+                    backdropFilter: "blur(10px)",
+                    color: "#333",
+                    padding: "6px 12px",
+                    borderRadius: "20px",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    zIndex: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    boxShadow: "0 4px 12px rgba(255, 193, 7, 0.4)",
+                    animation: "pulse 2s infinite",
+                  }}
+                >
+                  ✨ Presenting
+                </div>
+              )}
+
+              <video
+                autoPlay
+                playsInline
+                style={{
+                  width: "100%",
+                  height: "240px",
+                  objectFit: isRemoteScreenSharing ? "contain" : "cover",
+                  background: "#000",
+                }}
+                ref={(el) => {
+                  if (el && stream) {
+                    console.log(
+                      `🎥 Setting remote video for ${peerId}:`,
+                      stream
                     );
-                  });
-                }
-              }}
-              onLoadedMetadata={() => {
-                console.log(`✅ Remote video loaded for ${peerId}`);
-              }}
-              onError={(e) => {
-                console.error(`❌ Remote video error for ${peerId}:`, e);
-              }}
-            />
-          </div>
-        ))}
+                    console.log(`🎥 Stream details:`, {
+                      id: stream.id,
+                      active: stream.active,
+                      tracks: stream.getTracks().length,
+                      videoTracks: stream.getVideoTracks().length,
+                      audioTracks: stream.getAudioTracks().length,
+                    });
+                    el.srcObject = stream;
+
+                    // Force play
+                    el.play().catch((error) => {
+                      console.warn(
+                        `⚠️ Could not autoplay remote video for ${peerId}:`,
+                        error
+                      );
+                    });
+                  }
+                }}
+                onLoadedMetadata={() => {
+                  console.log(`✅ Remote video loaded for ${peerId}`);
+                }}
+                onError={(e) => {
+                  console.error(`❌ Remote video error for ${peerId}:`, e);
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
 
       {/* Meeting Controls */}
@@ -386,6 +653,10 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           onStartScreenShare={startScreenShare}
           onStopScreenShare={stopScreenShare}
           isScreenSharing={isScreenSharing}
+          isAudioEnabled={isAudioEnabled}
+          isVideoEnabled={isVideoEnabled}
+          onToggleAudio={toggleAudio}
+          onToggleVideo={toggleVideo}
         />
       )}
 
@@ -399,6 +670,42 @@ export default function WebRTCRoom({ signalingUrl }: Props) {
           onToggle={() => setIsChatOpen(!isChatOpen)}
         />
       )}
+
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes slideDown {
+          0% {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+
+        @keyframes slideInRight {
+          0% {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.8;
+            transform: scale(1.05);
+          }
+        }
+      `}</style>
     </div>
   );
 }

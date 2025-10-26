@@ -26,6 +26,11 @@ export function useWebRTC(
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenShareStream, setScreenShareStream] =
     useState<MediaStream | null>(null);
+  const [remoteScreenShares, setRemoteScreenShares] = useState<
+    Record<PeerId, boolean>
+  >({});
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
 
   const rtcConfig = useMemo<RTCConfiguration>(
     () => ({
@@ -41,15 +46,15 @@ export function useWebRTC(
         {
           urls: ["turn:relay1.expressturn.com:3480"],
           username: "000000002076717913",
-          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
+          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA=",
         },
         {
           urls: ["turn:relay1.expressturn.com:3480?transport=tcp"],
           username: "000000002076717913",
-          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA="
-        }
+          credential: "cjEo4cTEe3ANKISg4Dg8VbLxWEA=",
+        },
       ],
-      iceCandidatePoolSize: 10
+      iceCandidatePoolSize: 10,
     }),
     [iceServers]
   );
@@ -99,7 +104,7 @@ export function useWebRTC(
           enabled: e.track.enabled,
           muted: e.track.muted,
           readyState: e.track.readyState,
-          streams: e.streams.length
+          streams: e.streams.length,
         });
 
         if (e.streams && e.streams.length > 0) {
@@ -107,7 +112,7 @@ export function useWebRTC(
           console.log(`📹 Stream details:`, {
             id: stream.id,
             active: stream.active,
-            tracks: stream.getTracks().length
+            tracks: stream.getTracks().length,
           });
 
           setRemoteStreams((prev) => {
@@ -185,7 +190,7 @@ export function useWebRTC(
             kind: t.kind,
             enabled: t.enabled,
             muted: t.muted,
-            readyState: t.readyState
+            readyState: t.readyState,
           }))
         );
 
@@ -220,6 +225,28 @@ export function useWebRTC(
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
   }, []);
+
+  const toggleAudio = useCallback(() => {
+    if (localStreamRef.current) {
+      const audioTracks = localStreamRef.current.getAudioTracks();
+      audioTracks.forEach((track) => {
+        track.enabled = !track.enabled;
+      });
+      setIsAudioEnabled((prev) => !prev);
+      console.log(`🎤 Audio ${!isAudioEnabled ? "enabled" : "disabled"}`);
+    }
+  }, [isAudioEnabled]);
+
+  const toggleVideo = useCallback(() => {
+    if (localStreamRef.current) {
+      const videoTracks = localStreamRef.current.getVideoTracks();
+      videoTracks.forEach((track) => {
+        track.enabled = !track.enabled;
+      });
+      setIsVideoEnabled((prev) => !prev);
+      console.log(`📹 Video ${!isVideoEnabled ? "enabled" : "disabled"}`);
+    }
+  }, [isVideoEnabled]);
 
   useEffect(() => {
     const socket = ensureSocket();
@@ -326,7 +353,7 @@ export function useWebRTC(
           socket.emit("answer", {
             roomId,
             targetUserId: payload.fromUserId,
-            answer
+            answer,
           });
         } catch (error) {
           console.error(
@@ -389,6 +416,20 @@ export function useWebRTC(
       console.log("🔍 Room state debug:", data);
     };
 
+    const onScreenShareStarted = (payload: { userId: string }) => {
+      console.log(`🖥️ User ${payload.userId} started screen sharing`);
+      setRemoteScreenShares((prev) => ({ ...prev, [payload.userId]: true }));
+    };
+
+    const onScreenShareStopped = (payload: { userId: string }) => {
+      console.log(`🖥️ User ${payload.userId} stopped screen sharing`);
+      setRemoteScreenShares((prev) => {
+        const next = { ...prev };
+        delete next[payload.userId];
+        return next;
+      });
+    };
+
     socket.on("existing-users", onExistingUsers);
     socket.on("user-joined", onUserJoined);
     socket.on("user-left", onUserLeft);
@@ -396,6 +437,8 @@ export function useWebRTC(
     socket.on("answer", onAnswer);
     socket.on("ice-candidate", onCandidate);
     socket.on("room-state-debug", onRoomStateDebug);
+    socket.on("start-screen-share", onScreenShareStarted);
+    socket.on("stop-screen-share", onScreenShareStopped);
 
     return () => {
       socket.off("existing-users", onExistingUsers);
@@ -405,22 +448,23 @@ export function useWebRTC(
       socket.off("answer", onAnswer);
       socket.off("ice-candidate", onCandidate);
       socket.off("room-state-debug", onRoomStateDebug);
+      socket.off("start-screen-share", onScreenShareStarted);
+      socket.off("stop-screen-share", onScreenShareStopped);
     };
   }, [createPeerConnection, ensureSocket, roomId, startCallWith, userId]);
 
   const startScreenShare = useCallback(async () => {
     try {
-      const getDisplayMedia = (
-        navigator.mediaDevices as unknown as {
-          getDisplayMedia?: (c?: unknown) => Promise<MediaStream>;
-        }
-      ).getDisplayMedia;
-      if (!getDisplayMedia)
+      // Check if getDisplayMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         throw new Error("getDisplayMedia is not supported in this browser");
+      }
 
-      const displayStream: MediaStream = await getDisplayMedia({
+      // Call getDisplayMedia directly on navigator.mediaDevices to maintain proper context
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-      } as unknown);
+        audio: false, // Set to true if you want to capture system audio
+      } as DisplayMediaStreamOptions);
 
       const screenTrack = displayStream.getVideoTracks()[0];
 
@@ -501,11 +545,16 @@ export function useWebRTC(
     connectedPeers,
     isScreenSharing,
     screenShareStream,
+    remoteScreenShares,
+    isAudioEnabled,
+    isVideoEnabled,
     joinRoom,
     leaveRoom,
     startLocalMedia,
     startCallWith,
     stopLocalTracks,
+    toggleAudio,
+    toggleVideo,
     startScreenShare,
     stopScreenShare,
   };
